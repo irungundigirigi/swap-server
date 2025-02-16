@@ -1,0 +1,159 @@
+
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    profile_pic TEXT,
+    bio TEXT,
+    location POINT, -- Stores coordinates
+    verified BOOLEAN DEFAULT FALSE,
+    account_status VARCHAR(20) CHECK (account_status IN ('active', 'deactivated')) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE TABLE item_categories (
+    category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT
+);
+
+INSERT INTO item_categories (title, description) VALUES
+    ('Outdoor', 'Equipment for hiking, trekking, and adventure activities.'),
+    ('Camping', 'Tents, sleeping bags, portable stoves, and other camping essentials.'),
+    ('Hardware', 'Hand tools, power tools, and repair equipment.'),
+    ('Fitness', 'Bicycles, weights, yoga mats, and sports accessories.'),
+    ('Gardening', 'Seeds, pots, tools, and other gardening supplies.'),
+    ('Electronics', 'Used gadgets like phones, laptops, and accessories.'),
+    ('Music', 'Guitars, keyboards, and other instruments.'),
+    ('Books', 'Textbooks, novels, and learning materials.'),
+    ('Kitchen', 'Blenders, coffee makers, and cooking tools.');
+
+CREATE TABLE tags (
+    tag_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tag VARCHAR(100) NOT NULL,
+    category_id UUID REFERENCES item_categories(category_id) ON DELETE CASCADE
+);
+
+INSERT INTO tags (category_id, tag_type, tag_name) VALUES
+    -- Outdoor
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'material', 'Nylon'),
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'material', 'Gore-Tex'),
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'brand', 'The North Face'),
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'brand', 'Columbia'),
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'interest', 'Hiking'),
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'interest', 'Trekking'),
+    ('6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe', 'other', 'Ultralight'),
+
+    -- Camping
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'material', 'Canvas'),
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'material', 'Waterproof Fabric'),
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'brand', 'Coleman'),
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'brand', 'MSR'),
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'interest', 'Camping'),
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'interest', 'Survivalist'),
+    ('6600fae3-a76a-43ee-a2a5-acf023205a86', 'other', 'Weatherproof'),
+
+    -- Hardware
+    ('d42d1be6-06f6-4b6a-9bfb-e1b1638024f4', 'material', 'Steel'),
+    ('d42d1be6-06f6-4b6a-9bfb-e1b1638024f4', 'material', 'Aluminum'),
+    ('d42d1be6-06f6-4b6a-9bfb-e1b1638024f4', 'brand', 'Bosch'),
+    ('d42d1be6-06f6-4b6a-9bfb-e1b1638024f4', 'brand', 'DeWalt'),
+    ('d42d1be6-06f6-4b6a-9bfb-e1b1638024f4', 'interest', 'DIY Enthusiast'),
+    ('d42d1be6-06f6-4b6a-9bfb-e1b1638024f4', 'other', 'Multi-Function'),
+
+    -- Fitness
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'material', 'Rubber'),
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'material', 'Foam'),
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'brand', 'Nike'),
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'brand', 'Adidas'),
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'interest', 'Gym & Fitness'),
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'interest', 'Yoga'),
+    ('6dddf283-9857-4f25-ba2d-78fbe3eafe2b', 'other', 'Limited Edition'),
+
+    -- Gardening
+    ('213b5d2a-ecbe-45b0-91a3-b7f30f44c349', 'material', 'Wood'),
+    ('213b5d2a-ecbe-45b0-91a3-b7f30f44c349', 'material', 'Clay'),
+    ('7d80ad53-4fc5-4146-a44a-05695d1b8679', 'other', 'Limited Edition');
+
+CREATE TABLE items (
+    item_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
+    category_id UUID REFERENCES item_categories(category_id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    condition VARCHAR(50) CHECK (condition IN ('new', 'gently-used', 'used', 'damaged', 'vintage')),
+    image TEXT[], -- Stores one or multiple image URLs
+    location POINT DEFAULT NULL, -- Defaults to user's location
+    status VARCHAR(20) CHECK (status IN ('on-hold', 'available', 'reserved', 'swapped')) DEFAULT 'available',
+    verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+INSERT INTO items (user_id, category_id, title, description, condition, image, location, status, verified, created_at) VALUES
+    ('ced5e5ad-4239-4ebb-a453-7cc4fbdc948f', '6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe',
+     'Hiking Backpack', 'Lightweight 40L hiking backpack with multiple compartments.', 'gently-used',
+     ARRAY['https://example.com/backpack1.jpg'], POINT(37.7749, -122.4194), 'available', TRUE, NOW()),
+
+    ('ced5e5ad-4239-4ebb-a453-7cc4fbdc948f', '6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe',
+     'Camping Tent', '2-person waterproof tent, perfect for outdoor camping.', 'new',
+     ARRAY['https://example.com/tent1.jpg'], POINT(37.7749, -122.4194), 'available', FALSE, NOW()),
+
+    ('ced5e5ad-4239-4ebb-a453-7cc4fbdc948f', '6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe',
+     'Trekking Poles', 'Adjustable aluminum trekking poles with ergonomic grips.', 'used',
+     ARRAY['https://example.com/trekkingpoles.jpg'], POINT(37.7749, -122.4194), 'available', TRUE, NOW()),
+
+    ('ced5e5ad-4239-4ebb-a453-7cc4fbdc948f', '6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe',
+     'Portable Stove', 'Compact camping stove with fuel canister included.', 'gently-used',
+     ARRAY['https://example.com/stove.jpg'], POINT(37.7749, -122.4194), 'available', FALSE, NOW()),
+
+    ('ced5e5ad-4239-4ebb-a453-7cc4fbdc948f', '6d913e8e-ffc9-4bf7-9cf4-9a57122e2ffe',
+     'Sleeping Bag', 'Warm and lightweight sleeping bag rated for 0°C.', 'vintage',
+     ARRAY['https://example.com/sleepingbag.jpg'], POINT(37.7749, -122.4194), 'available', TRUE, NOW());
+
+CREATE TABLE item_tags (
+    item_id UUID REFERENCES items(item_id) ON DELETE CASCADE,
+    tag_id UUID REFERENCES tags(tag_id) ON DELETE CASCADE,
+    PRIMARY KEY (item_id, tag_id)
+);
+
+3. Listing Table
+Stores published items for swap. A listing can have one or multiple items.
+CREATE TABLE listings (
+    listing_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(user_id) ON DELETE CASCADE, -- 'ced5e5ad-4239-4ebb-a453-7cc4fbdc948f'
+    caption VARCHAR(255) NOT NULL,-- Swapping this extra hiking gear that is in perfect condition for other hiking gear eg sleeping bags / books can work.
+    likes INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+4. Listing_Items Table (Join Table)
+Maps items to listings (supports multiple items in a listing).
+CREATE TABLE listing_items (
+    listing_id UUID REFERENCES listings(listing_id) ON DELETE CASCADE,
+    item_id UUID REFERENCES items(item_id) ON DELETE CASCADE,
+    PRIMARY KEY (listing_id, item_id)
+);
+-- swapping for Table
+CREATE TABLE swapping_for (
+    item_id UUID REFERENCES items(item_id) ON DELETE CASCADE, ---item a6b26693-e785-4f6a-9297-2dae4a2b53a9
+    category_id UUID REFERENCES item_categories(category_id) ON DELETE CASCADE,
+)
+5. Offer Table
+Stores swap negotiations between users.
+CREATE TABLE offers (
+    offer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID REFERENCES listings(listing_id) ON DELETE CASCADE,
+    offered_by UUID REFERENCES users(user_id) ON DELETE CASCADE,  -- '220ca1ec-b060-4b5f-a2aa-c30c742089d4'
+    offered_item_id UUID REFERENCES items(item_id) ON DELETE CASCADE,  -- 
+    status VARCHAR(20) CHECK (status IN ('pending', 'accepted', 'declined')) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+6. Comment Table
+Stores user comments on listings.
+CREATE TABLE comments (
+    comment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID REFERENCES listings(listing_id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
