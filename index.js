@@ -75,6 +75,32 @@ app.post('/auth/login', async (req, res) => {
         res.status(500).json({ message: 'Server error', error });
     }
 });
+app.post('/api/listing',verifyToken, async (req, res) => {
+    const {listing_id,caption, category, item_id} = req.body;
+    const user_id = req.user.id;
+
+    const addListingQuery = `INSERT INTO listings (listing_id, user_id, caption) VALUES($1, $2, $3);`
+    const listingItemQuery = `INSERT INTO listing_items (listing_id, item_id) VALUES($1, $2);`
+    const swapCategoryQuery = `INSERT INTO listing_exchange_categories (item_id, category_id) VALUES($1, $2);`
+
+    console.log(request.body)
+
+    try {
+        const client = await pool.connect();
+        await client.query('BEGIN');
+        await client.query(addListingQuery,[listing_id, user_id, caption]);
+        await client.query(listingItemQuery,[listing_id, item_id])
+        await client.query(swapCategoryQuery,[listing_id, category])
+        await client.query('COMMIT');
+
+        res.status(201).json({ message: 'Listing created successfully', listing_id });
+        
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });    
+    }
+
+});
 
 // Multiple image upload endpoint
 app.post('/api/upload',verifyToken, upload.array('images[]', 5), (req, res) => {
@@ -91,7 +117,6 @@ app.post('/api/item',verifyToken, async (req, res) => {
                     // item_id,title,description,condition,image,location,category_id 
 
         const { item_id, title,category_id, description,image, condition, tags } = req.body;
-        console.log(req.body);
 
         const user_id = req.user.id;
 
