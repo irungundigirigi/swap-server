@@ -75,6 +75,19 @@ app.post('/auth/login', async (req, res) => {
         res.status(500).json({ message: 'Server error', error });
     }
 });
+app.get('/api/item_categories', verifyToken, async(req, res) => {
+    const client = await pool.connect()
+    try {
+
+        const result = await client.query('SELECT category_id, title FROM item_categories;');
+        
+        res.json(result.rows);
+
+        
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
+})
 app.post('/api/listing',verifyToken, async (req, res) => {
     const {listing_id,caption, category, item_id} = req.body;
     const user_id = req.user.id;
