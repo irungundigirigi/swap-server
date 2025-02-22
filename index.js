@@ -83,8 +83,6 @@ app.post('/api/listing',verifyToken, async (req, res) => {
     const listingItemQuery = `INSERT INTO listing_items (listing_id, item_id) VALUES($1, $2);`
     const swapCategoryQuery = `INSERT INTO listing_exchange_categories (item_id, category_id) VALUES($1, $2);`
 
-    console.log(request.body)
-
     try {
         const client = await pool.connect();
         await client.query('BEGIN');
@@ -109,8 +107,63 @@ app.post('/api/upload',verifyToken, upload.array('images[]', 5), (req, res) => {
     }
 
     const imagePaths = req.files.map(file => `/uploads/${file.filename}`);
-    res.json({ imageUrls: imagePaths });
+    console.log(imagePaths);
+    res.status(201).json({ imageUrls: imagePaths });
 });
+
+app.post('/api/item-upload', verifyToken, upload.array('images[]', 5), async (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const imagePaths = req.files.map(file => `/uploads/${file.filename}`); // Correct array format
+    const { item_id, title, category_id, description, condition, tags } = req.body;
+    const user_id = req.user.id;
+    const category = Number(category_id);
+
+    let tagsArray = [];
+    if (tags) {
+        try {
+            tagsArray = JSON.parse(tags); // Convert JSON string to array
+        } catch (error) {
+            return res.status(400).json({ message: 'Invalid tags format' });
+        }
+    }
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // Insert item into the database with a properly formatted array
+        await client.query(
+            `INSERT INTO items (item_id, user_id, category_id, title, description, condition, image) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7::text[])`,
+            [item_id, user_id, category, title, description, condition, imagePaths]
+        );
+
+        // Insert tags if provided
+        if (tagsArray.length) {
+            for (const tag of tagsArray) {
+                await client.query(
+                    `INSERT INTO item_tag_association (item_id, tag_id) VALUES ($1, $2)`,
+                    [item_id, tag]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        res.status(201).json({ message: 'Item added successfully', item_id });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: 'Failed to add item' });
+    } finally {
+        client.release();
+    }
+});
+
+
 
 app.post('/api/item',verifyToken, async (req, res) => {
     try {
@@ -155,12 +208,14 @@ app.post('/api/item',verifyToken, async (req, res) => {
     }
 });
 app.delete('/api/items', verifyToken, async(req, res) => {
-    const item_id = req.body.item_id;
+    const {item_id} = req.body;
+    
     images_Query = `SELECT * FROM items WHERE item_id = $1;`
     delete_item_Query = `DELETE FROM items WHERE item_id = $1;`
+    const client = await pool.connect();
     try {
-        const res = await pool.query(images_Query, [item_id]);
-        res.rows[0].image.forEach((filename) => {
+        const res = await client.query(images_Query, [item_id]);
+        res.rows[0]?.image.forEach((filename) => {
             const img_url = path.join(__dirname, filename)
             fs.unlink(img_url,(err) => {
                 if(err) {
@@ -170,7 +225,8 @@ app.delete('/api/items', verifyToken, async(req, res) => {
                 }
             })
         })
-        await pool.query(delete_item_Query, [item_id]);
+        await client.query(delete_item_Query, [item_id]);
+        res.status(200).json({ message: 'Item deleted successfully!' });
         
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete item' });
