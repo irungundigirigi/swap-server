@@ -12,7 +12,8 @@ const { request } = require('http');
 const router = express.Router();
 
 const app = express();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL,   idleTimeoutMillis: 30000,
+    keepAlive: true });
 
 app.use(express.json());
 app.use(cors());
@@ -75,6 +76,20 @@ app.post('/auth/login', async (req, res) => {
         res.status(500).json({ message: 'Server error', error });
     }
 });
+app.get('/api/category_tags', verifyToken, async(req, res) => {
+    const client = await pool.connect()
+    const c_id = req.query.category_id
+    try {
+
+        const result = await client.query('SELECT * FROM item_tags WHERE category_id = $1;', [c_id]);
+        
+        res.json(result.rows);
+
+        
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
+})
 app.get('/api/item_categories', verifyToken, async(req, res) => {
     const client = await pool.connect()
     try {
@@ -137,7 +152,7 @@ app.post('/api/item-upload', verifyToken, upload.array('images[]', 5), async (re
     let tagsArray = [];
     if (tags) {
         try {
-            tagsArray = JSON.parse(tags); // Convert JSON string to array
+            tagsArray = JSON.parse(tags);
         } catch (error) {
             return res.status(400).json({ message: 'Invalid tags format' });
         }
@@ -190,7 +205,7 @@ app.post('/api/item',verifyToken, async (req, res) => {
         try {
             await client.query('BEGIN');
             
-            // Insert item into the database
+            // Insert item into the dB
             await client.query(
                 `INSERT INTO items (item_id, user_id,category_id, title, description, condition, image) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [item_id, user_id,category_id, title, description, condition, image]
@@ -297,6 +312,7 @@ app.get('/api/listings', verifyToken, async (req, res) => {
 app.get('/api/items', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id; // Extract user ID from decoded JWT
+        console.log(userId)
 
         const itemsQuery = `
             SELECT 
@@ -305,10 +321,10 @@ app.get('/api/items', verifyToken, async (req, res) => {
                 i.description, 
                 i.condition, 
                 i.image, 
-                ARRAY_AGG(DISTINCT t.tagname) AS tag_names
+                ARRAY_AGG(DISTINCT t.tag_name) AS tag_names
             FROM items i
             LEFT JOIN item_tag_association ita ON ita.item_id = i.item_id
-            LEFT JOIN item_tags t ON ita.tag_id = t.tag_id
+            LEFT JOIN item_tags t ON ita.tag_id = t.id
             WHERE i.user_id = $1
             GROUP BY i.item_id, i.title, i.description, i.condition, i.image;
         `;
