@@ -6,17 +6,17 @@ require('dotenv').config();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const addUser = async () => {
-    const email = 'tevin.ajode@gmail.com'; // Change this
-    const username = 'tajode'; // Change this
-    const name = 'Tevin Ajode'; // Change this
-    const bio = 'Hello there! Nice to meet you.'; // Change this
-    const profilePic = 'https://randomuser.me/api/portraits/men/1.jpg'; // Change this
-    const plainPassword = 'tajode123'; // Change this
+    const email = 'irungu.en@gmail.com';
+    const username = 'eirungu';
+    const name = 'Edwin Irungu';
+    const bio = 'Hello there! Nice to meet you.';
+    const profilePic = 'https://randomuser.me/api/portraits/men/1.jpg';
+    const plainPassword = 'irungu99';
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
     const verified = true;
     const accountStatus = 'active';
-    const latitude = -1.2956; // Example for Nairobi
-    const longitude = 36.8219; // Example for Nairobi
+    const latitude = -1.2956;
+    const longitude = 36.8219;
 
     const query = `
         INSERT INTO users (username, email, password, name, bio, profile_pic, verified, account_status, location)
