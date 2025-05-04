@@ -129,7 +129,7 @@ CREATE TABLE item_tags (
 
 3. Listing Table
 Stores published items for swap. A listing can have one or multiple items.
-CREATE TABLE listings (
+CREATE TABLE listing (
     listing_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE, -- 'ced5e5ad-4239-4ebb-a453-7cc4fbdc948f'
     caption VARCHAR(255) NOT NULL,-- Swapping this extra hiking gear that is in perfect condition for other hiking gear eg sleeping bags / books can work.
@@ -138,7 +138,7 @@ CREATE TABLE listings (
 );
 4. Listing_Items Table (Join Table)
 Maps items to listings (supports multiple items in a listing).
-CREATE TABLE listing_items (
+CREATE TABLE listing_item (
     listing_id UUID REFERENCES listings(listing_id) ON DELETE CASCADE,
     item_id UUID REFERENCES items(item_id) ON DELETE CASCADE,
     PRIMARY KEY (listing_id, item_id)

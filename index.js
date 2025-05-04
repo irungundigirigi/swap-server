@@ -60,6 +60,30 @@ app.get('/api/validate-token', verifyToken, (req, res) => {
     res.json({ isValid: true, user: req.user });
 });
 
+app.get('/api/check_item_title',verifyToken, async (req, res) => {
+    const { title } = req.query;
+
+    if (!title || typeof title !== 'string') {
+        return res.status(400).json({ error: 'Valid title is required' });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        const result = await client.query(
+            'SELECT 1 FROM items WHERE TRIM(title) ILIKE TRIM($1) LIMIT 1',
+            [title]
+        );
+
+        res.json({ exists: result.rowCount > 0 });
+    } catch (error) {
+        console.error('Error checking item title:', error);
+        res.status(500).json({ error: 'Server error' });
+    } finally {
+        client.release();
+    }
+});
+
 app.post('/auth/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -103,30 +127,7 @@ app.get('/api/item_categories', verifyToken, async(req, res) => {
         res.status(500).json({ message: 'Server error', error });
     }
 })
-app.post('/api/listing',verifyToken, async (req, res) => {
-    const {listing_id,caption, category, item_id} = req.body;
-    const user_id = req.user.id;
 
-    const addListingQuery = `INSERT INTO listings (listing_id, user_id, caption) VALUES($1, $2, $3);`
-    const listingItemQuery = `INSERT INTO listing_items (listing_id, item_id) VALUES($1, $2);`
-    const swapCategoryQuery = `INSERT INTO listing_exchange_categories (item_id, category_id) VALUES($1, $2);`
-
-    try {
-        const client = await pool.connect();
-        await client.query('BEGIN');
-        await client.query(addListingQuery,[listing_id, user_id, caption]);
-        await client.query(listingItemQuery,[listing_id, item_id])
-        await client.query(swapCategoryQuery,[listing_id, category])
-        await client.query('COMMIT');
-
-        res.status(201).json({ message: 'Listing created successfully', listing_id });
-        
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });    
-    }
-
-});
 
 // Multiple image upload endpoint
 app.post('/api/upload',verifyToken, upload.array('images[]', 5), (req, res) => {
@@ -264,50 +265,153 @@ app.delete('/api/items', verifyToken, async(req, res) => {
 
 
 // Listings Route (with Authorization) mountain hiking backpack 4ol - comfortable rucksack ventilated taut mesh back for regular mountain hiking
-app.get('/api/listings', verifyToken, async (req, res) => {
+// app.get('/api/listings', verifyToken, async (req, res) => {
+//     try {
+//         const listingsQuery = `
+//            SELECT 
+//                 l.listing_id, 
+//                 u.user_id, 
+//                 u.name, 
+//                 u.username, 
+//                 u.profile_pic, 
+//                 l.caption, 
+//                 i.title, 
+//                 i.description, 
+//                 i.condition, 
+//                 i.image, 
+//                 -- COUNT(c.comment) AS comment_count, 
+//                 -- COUNT(DISTINCT ll.user_id) AS like_count,
+//                 -- COUNT(o.offer_id) AS offer_count,
+//                 ARRAY_AGG(DISTINCT t.tagname) AS tag_names,
+//                 ic.title AS exchange_category
+//             FROM listing l 
+//             JOIN users u ON l.user_id = u.user_id 
+//             JOIN listing_item li ON l.listing_id = li.listing_id 
+//             JOIN items i ON li.item_id = i.item_id 
+//             -- LEFT JOIN listing_comment c ON c.listing_id = l.listing_id 
+//             -- LEFT JOIN listing_like ll ON ll.listing_id = l.listing_id 
+//             -- LEFT JOIN offer o ON o.listing_id = l.listing_id
+//             LEFT JOIN item_tag_association ita ON ita.item_id = i.item_id  
+//             LEFT JOIN item_tags t ON ita.tag_id = t.tag_id
+//             LEFT JOIN listing_exchange_categories lec ON lec.item_id = l.listing_id
+//             LEFT JOIN item_categories ic ON lec.category_id = ic.category_id
+//             GROUP BY l.listing_id, u.user_id, i.item_id, i.title, i.description, i.condition, i.image, l.caption, ic.title;
+//         `;
+
+//         const result = await pool.query(listingsQuery);
+
+//         if (result.rows.length === 0) {
+//             return res.status(404).json({ message: 'No listings found' });
+//         }
+
+//         res.json(result.rows);
+//     } catch (error) {
+//         res.status(500).json({ message: 'Server error', error });
+//     }
+// });
+
+app.post('/api/listing', verifyToken, async (req, res) => {
+    const { listing_id, caption, category, item_ids } = req.body;
+    const user_id = req.user.id;
+  
+    // Ensure item_id is an array
+    // const itemIds = Array.isArray(item_ids) ? item_id : [item_id];
+  
+    const addListingQuery = `INSERT INTO listing (listing_id, user_id, caption) VALUES($1, $2, $3);`;
+    const listingItemQuery = `INSERT INTO listing_item (listing_id, item_id) VALUES($1, $2);`;
+  
     try {
-        const listingsQuery = `
-           SELECT 
-                l.listing_id, 
-                u.user_id, 
-                u.name, 
-                u.username, 
-                u.profile_pic, 
-                l.caption, 
-                i.title, 
-                i.description, 
-                i.condition, 
-                i.image, 
-                COUNT(c.comment) AS comment_count, 
-                COUNT(DISTINCT ll.user_id) AS like_count,
-                COUNT(o.offer_id) AS offer_count,
-                ARRAY_AGG(DISTINCT t.tagname) AS tag_names,
-                ic.title AS exchange_category
-            FROM listings l 
-            JOIN users u ON l.user_id = u.user_id 
-            JOIN listing_items li ON l.listing_id = li.listing_id 
-            JOIN items i ON li.item_id = i.item_id 
-            LEFT JOIN listing_comment c ON c.listing_id = l.listing_id 
-            LEFT JOIN listing_like ll ON ll.listing_id = l.listing_id 
-            LEFT JOIN offer o ON o.listing_id = l.listing_id
-            LEFT JOIN item_tag_association ita ON ita.item_id = i.item_id  
-            LEFT JOIN item_tags t ON ita.tag_id = t.tag_id
-            LEFT JOIN listing_exchange_categories lec ON lec.item_id = l.listing_id
-            LEFT JOIN item_categories ic ON lec.category_id = ic.category_id
-            GROUP BY l.listing_id, u.user_id, i.item_id, i.title, i.description, i.condition, i.image, l.caption, ic.title;
-        `;
-
-        const result = await pool.query(listingsQuery);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'No listings found' });
-        }
-
-        res.json(result.rows);
+      const client = await pool.connect();
+      await client.query('BEGIN');
+  
+      await client.query(addListingQuery, [listing_id, user_id, caption]);
+  
+      for (const id of item_ids) {
+        await client.query(listingItemQuery, [listing_id, id]);
+      }
+  
+      await client.query('COMMIT');
+      client.release();
+  
+      res.status(201).json({ message: 'Listing created successfully', listing_id });
+  
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error });
+      console.error(error);
+      res.status(500).json({ error: 'Server error' });
     }
-});
+  });
+  
+
+  app.get('/api/listings',verifyToken, async (req, res) => {
+    try {
+      const listingsQuery = `
+        SELECT 
+          l.listing_id, 
+          u.user_id, 
+          u.name, 
+          u.username, 
+          u.profile_pic, 
+          l.caption, 
+          i.item_id,
+          i.title, 
+          i.description, 
+          i.condition, 
+          i.image,
+          ARRAY_REMOVE(ARRAY_AGG(DISTINCT t.tag_name), NULL) AS tags
+        FROM listing l 
+        JOIN users u ON l.user_id = u.user_id 
+        JOIN listing_item li ON l.listing_id = li.listing_id 
+        JOIN items i ON li.item_id = i.item_id 
+        LEFT JOIN item_tag_association ita ON ita.item_id = i.item_id
+        LEFT JOIN item_tags t ON ita.tag_id = t.id
+        GROUP BY l.listing_id, u.user_id, u.name, u.username, u.profile_pic, l.caption,
+                 i.item_id, i.title, i.description, i.condition, i.image
+        ORDER BY l.listing_id;
+      `;
+  
+      const result = await pool.query(listingsQuery);
+  
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'No listings found' });
+      }
+  
+      const listingsMap = {};
+  
+      result.rows.forEach(row => {
+        if (!listingsMap[row.listing_id]) {
+          listingsMap[row.listing_id] = {
+            listing_id: row.listing_id,
+            caption: row.caption,
+            user: {
+              user_id: row.user_id,
+              name: row.name,
+              username: row.username,
+              profile_pic: row.profile_pic
+            },
+            items: []
+          };
+        }
+  
+        listingsMap[row.listing_id].items.push({
+          item_id: row.item_id,
+          title: row.title,
+          description: row.description,
+          condition: row.condition,
+          image: row.image,
+          tags: row.tags || []
+        });
+      });
+  
+      const listings = Object.values(listingsMap);
+  
+      res.json(listings);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server error', error });
+    }
+  });
+  
+  
 
 app.get('/api/items', verifyToken, async (req, res) => {
     try {
