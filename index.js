@@ -56,8 +56,16 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-app.get('/api/validate-token', verifyToken, (req, res) => {
-    res.json({ isValid: true, user: req.user });
+app.get('/api/validate-token', verifyToken, async(req, res) => {
+    const client = await pool.connect()
+    try {
+        const result = await client.query('SELECT * FROM users WHERE user_id = $1', [req.user.id])
+        res.json({ isValid: true, user: result.rows[0] });  
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });  
+    } finally {
+        client.release()
+    }
 });
 
 app.get('/api/check_item_title',verifyToken, async (req, res) => {
@@ -311,20 +319,31 @@ app.delete('/api/items', verifyToken, async(req, res) => {
 // });
 
 app.post('/api/listing', verifyToken, async (req, res) => {
-    const { listing_id, caption, category, item_ids } = req.body;
+    const { listing_id, caption, category, item_ids, location } = req.body;
     const user_id = req.user.id;
   
-    // Ensure item_id is an array
-    // const itemIds = Array.isArray(item_ids) ? item_id : [item_id];
+    // Make sure location has both longitude and latitude
+    if (!location || typeof location.longitude !== 'number' || typeof location.latitude !== 'number') {
+      return res.status(400).json({ error: 'Invalid or missing location data' });
+    }
   
-    const addListingQuery = `INSERT INTO listing (listing_id, user_id, caption) VALUES($1, $2, $3);`;
-    const listingItemQuery = `INSERT INTO listing_item (listing_id, item_id) VALUES($1, $2);`;
+    const { longitude, latitude } = location;
+  
+    const addListingQuery = `
+      INSERT INTO listing (listing_id, user_id, caption, location)
+      VALUES($1, $2, $3, POINT($4, $5));
+    `;
+  
+    const listingItemQuery = `
+      INSERT INTO listing_item (listing_id, item_id)
+      VALUES($1, $2);
+    `;
   
     try {
       const client = await pool.connect();
       await client.query('BEGIN');
   
-      await client.query(addListingQuery, [listing_id, user_id, caption]);
+      await client.query(addListingQuery, [listing_id, user_id, caption, longitude, latitude]);
   
       for (const id of item_ids) {
         await client.query(listingItemQuery, [listing_id, id]);
@@ -334,7 +353,6 @@ app.post('/api/listing', verifyToken, async (req, res) => {
       client.release();
   
       res.status(201).json({ message: 'Listing created successfully', listing_id });
-  
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Server error' });
@@ -347,6 +365,9 @@ app.post('/api/listing', verifyToken, async (req, res) => {
       const listingsQuery = `
         SELECT 
           l.listing_id, 
+          l.created_at,
+          l.updated_at,
+          l.location,
           u.user_id, 
           u.name, 
           u.username, 
@@ -366,7 +387,7 @@ app.post('/api/listing', verifyToken, async (req, res) => {
         LEFT JOIN item_tags t ON ita.tag_id = t.id
         GROUP BY l.listing_id, u.user_id, u.name, u.username, u.profile_pic, l.caption,
                  i.item_id, i.title, i.description, i.condition, i.image
-        ORDER BY l.listing_id;
+        ORDER BY created_at DESC ;
       `;
   
       const result = await pool.query(listingsQuery);
@@ -381,6 +402,9 @@ app.post('/api/listing', verifyToken, async (req, res) => {
         if (!listingsMap[row.listing_id]) {
           listingsMap[row.listing_id] = {
             listing_id: row.listing_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            location: row.location,
             caption: row.caption,
             user: {
               user_id: row.user_id,
