@@ -378,6 +378,7 @@ app.post('/api/listing', verifyToken, async (req, res) => {
           i.description, 
           i.condition, 
           i.image,
+          COUNT(DISTINCT o.id) AS offer_count,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT t.tag_name), NULL) AS tags
         FROM listing l 
         JOIN users u ON l.user_id = u.user_id 
@@ -385,6 +386,7 @@ app.post('/api/listing', verifyToken, async (req, res) => {
         JOIN items i ON li.item_id = i.item_id 
         LEFT JOIN item_tag_association ita ON ita.item_id = i.item_id
         LEFT JOIN item_tags t ON ita.tag_id = t.id
+        LEFT JOIN offer o ON o.listing_id = l.listing_id
         GROUP BY l.listing_id, u.user_id, u.name, u.username, u.profile_pic, l.caption,
                  i.item_id, i.title, i.description, i.condition, i.image
         ORDER BY created_at DESC ;
@@ -406,6 +408,7 @@ app.post('/api/listing', verifyToken, async (req, res) => {
             updated_at: row.updated_at,
             location: row.location,
             caption: row.caption,
+            offer_count: parseInt(row.offer_count, 10),
             user: {
               user_id: row.user_id,
               name: row.name,
@@ -468,6 +471,84 @@ app.get('/api/items', verifyToken, async (req, res) => {
         res.status(500).json({ message: 'Server error', error });
     }
 });
+
+app.post('/api/offers', verifyToken, async (req, res) => {
+    const { listing_id, message, item_ids } = req.body;
+    const offerer_id = req.user.id;
+
+    if (!listing_id || !Array.isArray(item_ids) || item_ids.length === 0) {
+        return res.status(400).json({ message: 'Missing required fields or invalid item_ids' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Insert offer
+        const offerResult = await client.query(
+            `INSERT INTO offer (listing_id, offerer_id, message) 
+             VALUES ($1, $2, $3) RETURNING id`,
+            [listing_id, offerer_id, message || null]
+        );
+        const offer_id = offerResult.rows[0].id;
+
+        // Insert offer items
+        const insertItemQuery = `INSERT INTO offer_items (offer_id, item_id) VALUES ($1, $2)`;
+        for (const item_id of item_ids) {
+            await client.query(insertItemQuery, [offer_id, item_id]);
+        }
+
+        await client.query('COMMIT');
+        res.status(201).json({ message: 'Offer submitted', offer_id });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Offer creation failed:', err);
+        res.status(500).json({ error: 'Failed to submit offer' });
+    } finally {
+        client.release();
+    }
+});
+app.get('/api/offers/:listing_id', verifyToken, async (req, res) => {
+    const { listing_id } = req.params;
+
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT 
+                o.id AS offer_id,
+                o.message,
+                o.status,
+                o.created_at,
+                u.id AS offerer_id,
+                u.name AS offerer_name,
+                json_agg(
+                    json_build_object(
+                        'item_id', i.item_id,
+                        'title', i.title,
+                        'description', i.description,
+                        'condition', i.condition,
+                        'image', i.image
+                    )
+                ) AS items
+            FROM offer o
+            JOIN "user" u ON u.id = o.offerer_id
+            JOIN offer_items oi ON oi.offer_id = o.id
+            JOIN items i ON i.item_id = oi.item_id
+            WHERE o.listing_id = $1
+            GROUP BY o.id, u.id
+            ORDER BY o.created_at DESC
+        `;
+        const result = await client.query(query, [listing_id]);
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching offers:', err);
+        res.status(500).json({ error: 'Failed to retrieve offers' });
+    } finally {
+        client.release();
+    }
+});
+
+
 
 
 // Start Server
