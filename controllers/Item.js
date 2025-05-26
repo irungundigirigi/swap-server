@@ -2,8 +2,39 @@ import path from 'path';
 import fs from 'fs';
 import pool from '../db.js'; 
 
-
 class ItemController {
+  static async getItems(req,res) {
+    try {
+      const userId = req.user.id; // Extract user ID from decoded JWT
+
+      const itemsQuery = `
+          SELECT 
+              i.item_id, 
+              i.title, 
+              i.description, 
+              i.condition, 
+              i.image, 
+              ARRAY_AGG(DISTINCT t.tag_name) AS tag_names
+          FROM items i
+          LEFT JOIN item_tag_association ita ON ita.item_id = i.item_id
+          LEFT JOIN item_tags t ON ita.tag_id = t.id
+          WHERE i.user_id = $1
+          GROUP BY i.item_id, i.title, i.description, i.condition, i.image;
+      `;
+
+      const result = await pool.query(itemsQuery, [userId]);
+
+      if (result.rows.length === 0) {
+          return res.status(404).json({ message: 'No items found' });
+      }
+
+      res.json(result.rows);
+  } catch (error) {
+      res.status(500).json({ message: 'Server error', error });
+  }
+
+  };
+
   static async checkTitle(req, res) {
     const { title } = req.query;
 
