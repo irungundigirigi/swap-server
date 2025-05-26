@@ -12,22 +12,24 @@ const upload = multer({ dest: 'uploads/' });
 const router = express.Router();
 
 // Auth
-router.post('/login', AuthController.login);
-router.get('/validate-token', authenticateJWT, AuthController.validateToken);
+router.post('/auth/login', AuthController.login);
+router.get('/api/validate-token', authenticateJWT, AuthController.validateToken);
 
 // Items
-router.get('/items/check-title', ItemController.checkTitle);
-router.get('/items/categories', ItemController.getCategories);
-router.get('/items/category-tags', ItemController.getCategoryTags);
-router.post('/items/add', authenticateJWT, ItemController.addItem);
-router.post('/items/add-upload', authenticateJWT, upload.array('images', 5), ItemController.addItemWithUpload);
-router.get('/items/user', authenticateJWT, ItemController.getUserItems);
-router.delete('/items/delete', authenticateJWT, ItemController.deleteItem);
+router.get('/api/items', authenticateJWT,ItemController.getItems);
+router.get('/api/items/check-title', ItemController.checkTitle);
+router.get('/api/items/categories', ItemController.getCategories);
+router.get('/api/items/category-tags', ItemController.getCategoryTags);
+router.post('/api/items/add', authenticateJWT, ItemController.addItem);
+router.post('/api/items/add-upload', authenticateJWT, upload.array('images', 5), ItemController.addItemWithUpload);
+router.get('/api/items/user', authenticateJWT, ItemController.getUserItems);
+router.delete('/api/items/delete', authenticateJWT, ItemController.deleteItem);
 
 // Listings
-router.post('/listings/add', authenticateJWT, ListingController.createListing);
+router.get('/api/listings', authenticateJWT, ListingController.getListings)
+router.post('/api/listings/add', authenticateJWT, ListingController.createListing);
 
 // Offers
-router.post('/offers/add', authenticateJWT, OfferController.createOffer);
+router.post('/api/offers/add', authenticateJWT, OfferController.createOffer);
 
 export default router;
